@@ -1,14 +1,33 @@
 const http = require("http");
 const url = require("url");
 const fs = require("fs");
-const readline = require('readline');
+const readline = require("readline");
 const querystring = require("querystring");
 
-const data = fs.readFileSync("test.txt");
+const file = "example.txt";
 
-const readInterface = readline.createInterface({
-  input: fs.createReadStream('test.txt'),
-  console: true
+//const data = fs.readFileSync(file);
+
+const stream = fs.createReadStream(file, {
+  flags: "r",
+  encoding: "utf-8",
+  fd: null,
+  mode: "0666",
+  bufferSize: 64 * 1024,
+});
+
+let fileData = "";
+let lines;
+let datetime;
+
+stream.on("data", function (data) {
+  fileData += data;
+
+  lines = fileData.split("\n");
+
+  datetime = lines.map((word) => {
+    return Date.parse(word.split(" ")[0]);
+  });
 });
 
 const server = http.createServer((req, res) => {
@@ -16,7 +35,9 @@ const server = http.createServer((req, res) => {
 
   if (urlparse.pathname == "/logs" && req.method == "GET") {
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(data);
+    res.end(fileData);
+    console.log(lines);
+    console.log(datetime);
   }
   if (urlparse.pathname == "/logs/timeframe" && req.method == "GET") {
     let start, end;
@@ -24,27 +45,27 @@ const server = http.createServer((req, res) => {
     let output = "";
 
     const search = urlparse.search;
+    let result;
+
     if (search) {
       const [, query] = urlparse.search.split("?");
       start = parseInt(querystring.parse(query).start);
-      start = new Date(start * 1000).toISOString();
+      //start = new Date(start).toISOString();
       end = parseInt(querystring.parse(query).end);
-      end = new Date(end * 1000).toISOString();
+      //end = new Date(end).toISOString();
 
-      start_time = new Date(start * 1000);
-      end_time = new Date(end * 1000);
+      // start_time = new Date(start);
+      // end_time = new Date(end);
 
-      readInterface.on('line', function(line){
-        const [time, ] = line.split(" ");
-        time = Date.parse(new Date(time));
-        if( time > start && time <= end){
-          output += line + "\n ";
-        }
-      });
+      result = lines.filter(
+        (line) =>
+          Date.parse(line.split(" ")[0]) > start &&
+          Date.parse(line.split(" ")[0]) < end
+      );
+      output = result.join("\n");
     }
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(`Start time is ${start} or ${start_time} and end time is ${end} or ${end_time}`);
-    //res.end(output);
+    res.end(output);
   }
 });
 
